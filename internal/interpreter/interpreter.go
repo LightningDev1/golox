@@ -106,6 +106,19 @@ func (i *Interpreter) evaluate(expr ast.Expr) (any, error) {
 		}
 		return value, nil
 
+	case *ast.Assign:
+		value, err := i.evaluate(e.Value)
+		if err != nil {
+			return nil, err
+		}
+
+		ok := i.environment.Assign(e.Name, value)
+		if !ok {
+			return nil, fmt.Errorf("Undefined variable '%s'.", e.Name.Lexeme)
+		}
+
+		return value, nil
+
 	case *ast.Binary:
 		left, err := i.evaluate(e.Left)
 		if err != nil {

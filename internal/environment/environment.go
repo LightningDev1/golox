@@ -25,3 +25,12 @@ func (e *Environment) Get(name scanner.Token) (any, bool) {
 
 	return nil, false
 }
+
+func (e *Environment) Assign(name scanner.Token, value any) bool {
+	if _, ok := e.values[name.Lexeme]; ok {
+		e.values[name.Lexeme] = value
+		return true
+	}
+
+	return false
+}
