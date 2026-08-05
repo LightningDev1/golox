@@ -6,13 +6,18 @@ import (
 	"strconv"
 
 	"github.com/LightningDev1/golox/internal/ast"
+	"github.com/LightningDev1/golox/internal/environment"
 	"github.com/LightningDev1/golox/internal/scanner"
 )
 
-type Interpreter struct{}
+type Interpreter struct {
+	environment *environment.Environment
+}
 
 func New() *Interpreter {
-	return &Interpreter{}
+	return &Interpreter{
+		environment: environment.New(),
+	}
 }
 
 func (i *Interpreter) Interpret(statements []ast.Stmt) error {
@@ -37,6 +42,18 @@ func (i *Interpreter) execute(statement ast.Stmt) error {
 		}
 
 		fmt.Println(i.stringify(value))
+
+	case *ast.VarStmt:
+		var value any
+		if stmt.Initializer != nil {
+			var err error
+			value, err = i.evaluate(stmt.Initializer)
+			if err != nil {
+				return err
+			}
+		}
+
+		i.environment.Define(stmt.Name.Lexeme, value)
 	}
 
 	return nil
@@ -81,6 +98,13 @@ func (i *Interpreter) evaluate(expr ast.Expr) (any, error) {
 			value := !i.isTruthy(right)
 			return value, nil
 		}
+
+	case *ast.Variable:
+		value, ok := i.environment.Get(e.Name)
+		if !ok {
+			return nil, fmt.Errorf("Undefined variable '%s'.", e.Name.Lexeme)
+		}
+		return value, nil
 
 	case *ast.Binary:
 		left, err := i.evaluate(e.Left)

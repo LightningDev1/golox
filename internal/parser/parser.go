@@ -18,7 +18,7 @@ func (p *Parser) Parse() ([]ast.Stmt, error) {
 	var statements []ast.Stmt
 
 	for !p.isAtEnd() {
-		stmt, err := p.statement()
+		stmt, err := p.declaration()
 		if err != nil {
 			return nil, err
 		}
@@ -27,6 +27,43 @@ func (p *Parser) Parse() ([]ast.Stmt, error) {
 	}
 
 	return statements, nil
+}
+
+func (p *Parser) declaration() (stmt ast.Stmt, err error) {
+	if p.match(scanner.TOKEN_VAR) {
+		stmt, err = p.varDeclaration()
+	} else {
+		stmt, err = p.statement()
+	}
+
+	if err != nil {
+		p.synchronize()
+		return nil, err
+	}
+
+	return stmt, nil
+}
+
+func (p *Parser) varDeclaration() (ast.Stmt, error) {
+	name, err := p.consume(scanner.TOKEN_IDENTIFIER, "Expect variable name.")
+	if err != nil {
+		return nil, err
+	}
+
+	var initializer ast.Expr
+	if p.match(scanner.TOKEN_EQUAL) {
+		initializer, err = p.expression()
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	_, err = p.consume(scanner.TOKEN_SEMICOLON, "Expect ';' after variable declaration.")
+	if err != nil {
+		return nil, err
+	}
+
+	return &ast.VarStmt{Name: name, Initializer: initializer}, nil
 }
 
 func (p *Parser) statement() (ast.Stmt, error) {
@@ -174,6 +211,10 @@ func (p *Parser) primary() (ast.Expr, error) {
 
 	if p.match(scanner.TOKEN_NUMBER, scanner.TOKEN_STRING) {
 		return &ast.Literal{Value: p.previous().Literal}, nil
+	}
+
+	if p.match(scanner.TOKEN_IDENTIFIER) {
+		return &ast.Variable{Name: p.previous()}, nil
 	}
 
 	if p.match(scanner.TOKEN_LEFT_PAREN) {
