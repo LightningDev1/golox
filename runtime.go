@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/LightningDev1/golox/internal/ast"
+	"github.com/LightningDev1/golox/internal/interpreter"
 	"github.com/LightningDev1/golox/internal/parser"
 	"github.com/LightningDev1/golox/internal/scanner"
 )
@@ -13,10 +13,12 @@ import (
 type Runtime struct {
 	HadError        bool
 	HadRuntimeError bool
+
+	interpreter *interpreter.Interpreter
 }
 
 func NewRuntime() *Runtime {
-	return &Runtime{}
+	return &Runtime{interpreter: interpreter.New()}
 }
 
 func (r *Runtime) Run(source string) {
@@ -37,7 +39,9 @@ func (r *Runtime) Run(source string) {
 		return
 	}
 
-	fmt.Println(ast.NewPrinter().Print(expr))
+	if err = r.interpreter.Interpret(expr); err != nil {
+		r.HadRuntimeError = true
+	}
 }
 
 func (r *Runtime) RunFile(file string) error {

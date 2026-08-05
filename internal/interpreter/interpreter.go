@@ -1,0 +1,183 @@
+package interpreter
+
+import (
+	"fmt"
+	"reflect"
+	"strconv"
+
+	"github.com/LightningDev1/golox/internal/ast"
+	"github.com/LightningDev1/golox/internal/scanner"
+)
+
+type Interpreter struct{}
+
+func New() *Interpreter {
+	return &Interpreter{}
+}
+
+func (i *Interpreter) Interpret(expr ast.Expr) error {
+	value, err := i.evaluate(expr)
+	if err != nil {
+		return err
+	}
+	fmt.Println(i.stringify(value))
+	return nil
+}
+
+func (i *Interpreter) stringify(value any) string {
+	if value == nil {
+		return "nil"
+	}
+
+	switch v := value.(type) {
+	case float64:
+		return strconv.FormatFloat(v, 'g', -1, 64)
+	default:
+		return fmt.Sprint(v)
+	}
+}
+
+func (i *Interpreter) evaluate(expr ast.Expr) (any, error) {
+	if expr == nil {
+		return nil, nil
+	}
+
+	switch e := expr.(type) {
+	case *ast.Literal:
+		return e.Value, nil
+
+	case *ast.Unary:
+		right, err := i.evaluate(e.Right)
+		if err != nil {
+			return nil, err
+		}
+
+		switch e.Operator.Type {
+		case scanner.TOKEN_MINUS:
+			rightDouble, ok := right.(float64)
+			if !ok {
+				return nil, fmt.Errorf("invalid type")
+			}
+			return -rightDouble, nil
+		case scanner.TOKEN_BANG:
+			value := !i.isTruthy(right)
+			return value, nil
+		}
+
+	case *ast.Binary:
+		left, err := i.evaluate(e.Left)
+		if err != nil {
+			return nil, fmt.Errorf("invalid left")
+		}
+
+		right, err := i.evaluate(e.Right)
+		if err != nil {
+			return nil, fmt.Errorf("invalid right")
+		}
+
+		switch e.Operator.Type {
+		case scanner.TOKEN_MINUS:
+			l, r, err := i.checkNumberOperands(e.Operator, left, right)
+			if err != nil {
+				return nil, err
+			}
+			return l - r, nil
+
+		case scanner.TOKEN_PLUS:
+			if l, ok := left.(float64); ok {
+				if r, ok := right.(float64); ok {
+					return l + r, nil
+				}
+			}
+			if l, ok := left.(string); ok {
+				if r, ok := right.(string); ok {
+					return l + r, nil
+				}
+			}
+			return nil, NewRuntimeError(e.Operator, "Operands must be two numbers or two strings.")
+
+		case scanner.TOKEN_SLASH:
+			l, r, err := i.checkNumberOperands(e.Operator, left, right)
+			if err != nil {
+				return nil, err
+			}
+			return l / r, nil
+
+		case scanner.TOKEN_STAR:
+			l, r, err := i.checkNumberOperands(e.Operator, left, right)
+			if err != nil {
+				return nil, err
+			}
+			return l * r, nil
+
+		case scanner.TOKEN_GREATER:
+			l, r, err := i.checkNumberOperands(e.Operator, left, right)
+			if err != nil {
+				return nil, err
+			}
+			return l > r, nil
+
+		case scanner.TOKEN_GREATER_EQUAL:
+			l, r, err := i.checkNumberOperands(e.Operator, left, right)
+			if err != nil {
+				return nil, err
+			}
+			return l >= r, nil
+
+		case scanner.TOKEN_LESS:
+			l, r, err := i.checkNumberOperands(e.Operator, left, right)
+			if err != nil {
+				return nil, err
+			}
+			return l < r, nil
+
+		case scanner.TOKEN_LESS_EQUAL:
+			l, r, err := i.checkNumberOperands(e.Operator, left, right)
+			if err != nil {
+				return nil, err
+			}
+			return l <= r, nil
+
+		case scanner.TOKEN_BANG_EQUAL:
+			return !i.isEqual(left, right), nil
+
+		case scanner.TOKEN_EQUAL_EQUAL:
+			return i.isEqual(left, right), nil
+		}
+
+	case *ast.Grouping:
+		return i.evaluate(e.Expression)
+	}
+	return nil, nil
+}
+
+func (i *Interpreter) isTruthy(value any) bool {
+	if value == nil {
+		return false
+	}
+
+	if valueBool, ok := value.(bool); ok {
+		return valueBool
+	}
+
+	return true
+}
+
+func (i *Interpreter) isEqual(a, b any) bool {
+	if a == nil && b == nil {
+		return true
+	}
+	if a == nil {
+		return false
+	}
+	return reflect.DeepEqual(a, b)
+}
+
+func (i *Interpreter) checkNumberOperands(op scanner.Token, left, right any) (float64, float64, error) {
+	l, okL := left.(float64)
+	r, okR := right.(float64)
+	if okL && okR {
+		return l, r, nil
+	}
+	return 0, 0, NewRuntimeError(op, "Operands must be numbers.")
+}
