@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/LightningDev1/golox/internal/ast"
+	"github.com/LightningDev1/golox/internal/parser"
 	"github.com/LightningDev1/golox/internal/scanner"
 )
 
@@ -25,9 +27,17 @@ func (r *Runtime) Run(source string) {
 		r.Report(err.Line, "", err.Message)
 	}
 
-	for _, token := range tokens {
-		fmt.Println(token)
+	p := parser.NewParser(tokens)
+	expr, err := p.Parse()
+	if err != nil {
+		r.Report(0, "", err.Error())
 	}
+
+	if r.HadError {
+		return
+	}
+
+	fmt.Println(ast.NewPrinter().Print(expr))
 }
 
 func (r *Runtime) RunFile(file string) error {
