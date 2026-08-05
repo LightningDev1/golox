@@ -10,7 +10,7 @@ type Parser struct {
 	current int
 }
 
-func NewParser(tokens []scanner.Token) *Parser {
+func New(tokens []scanner.Token) *Parser {
 	return &Parser{tokens: tokens, current: 0}
 }
 

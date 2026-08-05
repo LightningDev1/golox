@@ -27,7 +27,7 @@ func (r *Runtime) Run(source string) {
 		r.Report(err.Line, "", err.Message)
 	}
 
-	p := parser.NewParser(tokens)
+	p := parser.New(tokens)
 	expr, err := p.Parse()
 	if err != nil {
 		r.Report(0, "", err.Error())
