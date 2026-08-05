@@ -15,12 +15,30 @@ func New() *Interpreter {
 	return &Interpreter{}
 }
 
-func (i *Interpreter) Interpret(expr ast.Expr) error {
-	value, err := i.evaluate(expr)
-	if err != nil {
-		return err
+func (i *Interpreter) Interpret(statements []ast.Stmt) error {
+	for _, statement := range statements {
+		if err := i.execute(statement); err != nil {
+			return err
+		}
 	}
-	fmt.Println(i.stringify(value))
+
+	return nil
+}
+
+func (i *Interpreter) execute(statement ast.Stmt) error {
+	switch stmt := statement.(type) {
+	case *ast.ExpressionStmt:
+		_, _ = i.evaluate(stmt.Expression)
+
+	case *ast.PrintStmt:
+		value, err := i.evaluate(stmt.Expression)
+		if err != nil {
+			return err
+		}
+
+		fmt.Println(i.stringify(value))
+	}
+
 	return nil
 }
 

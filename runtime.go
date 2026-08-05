@@ -30,7 +30,7 @@ func (r *Runtime) Run(source string) {
 	}
 
 	p := parser.New(tokens)
-	expr, err := p.Parse()
+	statements, err := p.Parse()
 	if err != nil {
 		r.Report(0, "", err.Error())
 	}
@@ -39,7 +39,7 @@ func (r *Runtime) Run(source string) {
 		return
 	}
 
-	if err = r.interpreter.Interpret(expr); err != nil {
+	if err = r.interpreter.Interpret(statements); err != nil {
 		r.HadRuntimeError = true
 	}
 }

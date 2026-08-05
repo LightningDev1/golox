@@ -14,8 +14,55 @@ func New(tokens []scanner.Token) *Parser {
 	return &Parser{tokens: tokens, current: 0}
 }
 
-func (p *Parser) Parse() (ast.Expr, error) {
-	return p.expression()
+func (p *Parser) Parse() ([]ast.Stmt, error) {
+	var statements []ast.Stmt
+
+	for !p.isAtEnd() {
+		stmt, err := p.statement()
+		if err != nil {
+			return nil, err
+		}
+
+		statements = append(statements, stmt)
+	}
+
+	return statements, nil
+}
+
+func (p *Parser) statement() (ast.Stmt, error) {
+	if p.match(scanner.TOKEN_PRINT) {
+		return p.printStatement()
+	}
+
+	return p.expressionStatement()
+}
+
+func (p *Parser) printStatement() (ast.Stmt, error) {
+	value, err := p.expression()
+	if err != nil {
+		return nil, err
+	}
+
+	_, err = p.consume(scanner.TOKEN_SEMICOLON, "Expect ';' after value.")
+	if err != nil {
+		return nil, err
+	}
+
+	return &ast.PrintStmt{Expression: value}, nil
+}
+
+func (p *Parser) expressionStatement() (ast.Stmt, error) {
+	expr, err := p.expression()
+	if err != nil {
+		return nil, err
+	}
+
+	_, err = p.consume(scanner.TOKEN_SEMICOLON, "Expect ';' after expression.")
+	if err != nil {
+		return nil, err
+	}
+
+	return &ast.ExpressionStmt{Expression: expr}, nil
 }
 
 func (p *Parser) expression() (ast.Expr, error) {
