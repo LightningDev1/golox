@@ -23,7 +23,20 @@ type BlockStmt struct {
 	Statements []Stmt
 }
 
+type IfStmt struct {
+	Condition  Expr
+	ThenBranch Stmt
+	ElseBranch Stmt
+}
+
+type WhileStmt struct {
+	Condition Expr
+	Body      Stmt
+}
+
 func (*ExpressionStmt) stmtNode() {}
 func (*PrintStmt) stmtNode()      {}
 func (*VarStmt) stmtNode()        {}
 func (*BlockStmt) stmtNode()      {}
+func (*IfStmt) stmtNode()         {}
+func (*WhileStmt) stmtNode()      {}

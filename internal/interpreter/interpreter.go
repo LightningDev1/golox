@@ -59,6 +59,34 @@ func (i *Interpreter) execute(statement ast.Stmt) error {
 	case *ast.BlockStmt:
 		enclosingEnv := environment.NewEnclosing(i.environment)
 		return i.executeBlock(stmt.Statements, enclosingEnv)
+
+	case *ast.IfStmt:
+		condValue, err := i.evaluate(stmt.Condition)
+		if err != nil {
+			return err
+		}
+
+		if i.isTruthy(condValue) {
+			return i.execute(stmt.ThenBranch)
+		} else if stmt.ElseBranch != nil {
+			return i.execute(stmt.ThenBranch)
+		}
+
+	case *ast.WhileStmt:
+		for {
+			condValue, err := i.evaluate(stmt.Condition)
+			if err != nil {
+				return err
+			}
+
+			if !i.isTruthy(condValue) {
+				break
+			}
+
+			if err = i.execute(stmt.Body); err != nil {
+				return err
+			}
+		}
 	}
 
 	return nil
@@ -223,6 +251,25 @@ func (i *Interpreter) evaluate(expr ast.Expr) (any, error) {
 
 	case *ast.Grouping:
 		return i.evaluate(e.Expression)
+
+	case *ast.Logical:
+		left, err := i.evaluate(e.Left)
+		if err != nil {
+			return nil, err
+		}
+
+		switch e.Operator.Type {
+		case scanner.TOKEN_OR:
+			if i.isTruthy(left) {
+				return left, nil
+			}
+		case scanner.TOKEN_AND:
+			if !i.isTruthy(left) {
+				return left, nil
+			}
+		}
+
+		return i.evaluate(e.Right)
 	}
 	return nil, nil
 }
