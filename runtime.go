@@ -26,13 +26,15 @@ func (r *Runtime) Run(source string) {
 	tokens, errs := sc.ScanTokens()
 
 	for _, err := range errs {
-		r.Report(err.Line, "", err.Message)
+		fmt.Fprintln(os.Stderr, err)
+		r.HadError = true
 	}
 
 	p := parser.New(tokens)
 	statements, err := p.Parse()
 	if err != nil {
-		r.Report(0, "", err.Error())
+		fmt.Fprintln(os.Stderr, err)
+		r.HadError = true
 	}
 
 	if r.HadError {
@@ -40,6 +42,7 @@ func (r *Runtime) Run(source string) {
 	}
 
 	if err = r.interpreter.Interpret(statements); err != nil {
+		fmt.Fprintln(os.Stderr, err)
 		r.HadRuntimeError = true
 	}
 }
@@ -76,9 +79,4 @@ func (r *Runtime) RunPrompt() error {
 	}
 
 	return stdin.Err()
-}
-
-func (r *Runtime) Report(line int, where string, message string) {
-	fmt.Fprintf(os.Stderr, "[line %d] Error%s: %s\n", line, where, message)
-	r.HadError = true
 }
