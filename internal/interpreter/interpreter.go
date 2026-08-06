@@ -33,7 +33,8 @@ func (i *Interpreter) Interpret(statements []ast.Stmt) error {
 func (i *Interpreter) execute(statement ast.Stmt) error {
 	switch stmt := statement.(type) {
 	case *ast.ExpressionStmt:
-		_, _ = i.evaluate(stmt.Expression)
+		_, err := i.evaluate(stmt.Expression)
+		return err
 
 	case *ast.PrintStmt:
 		value, err := i.evaluate(stmt.Expression)
@@ -54,6 +55,24 @@ func (i *Interpreter) execute(statement ast.Stmt) error {
 		}
 
 		i.environment.Define(stmt.Name.Lexeme, value)
+
+	case *ast.BlockStmt:
+		enclosingEnv := environment.NewEnclosing(i.environment)
+		return i.executeBlock(stmt.Statements, enclosingEnv)
+	}
+
+	return nil
+}
+
+func (i *Interpreter) executeBlock(statements []ast.Stmt, env *environment.Environment) error {
+	previous := i.environment
+	i.environment = env
+	defer func() { i.environment = previous }()
+
+	for _, stmt := range statements {
+		if err := i.execute(stmt); err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -91,7 +110,7 @@ func (i *Interpreter) evaluate(expr ast.Expr) (any, error) {
 		case scanner.TOKEN_MINUS:
 			rightDouble, ok := right.(float64)
 			if !ok {
-				return nil, fmt.Errorf("invalid type")
+				return nil, NewRuntimeError(e.Operator, "Operand must be a number.")
 			}
 			return -rightDouble, nil
 		case scanner.TOKEN_BANG:
@@ -102,7 +121,8 @@ func (i *Interpreter) evaluate(expr ast.Expr) (any, error) {
 	case *ast.Variable:
 		value, ok := i.environment.Get(e.Name)
 		if !ok {
-			return nil, fmt.Errorf("Undefined variable '%s'.", e.Name.Lexeme)
+			return nil, NewRuntimeError(e.Name,
+				fmt.Sprintf("Undefined variable '%s'.", e.Name.Lexeme))
 		}
 		return value, nil
 
@@ -114,7 +134,8 @@ func (i *Interpreter) evaluate(expr ast.Expr) (any, error) {
 
 		ok := i.environment.Assign(e.Name, value)
 		if !ok {
-			return nil, fmt.Errorf("Undefined variable '%s'.", e.Name.Lexeme)
+			return nil, NewRuntimeError(e.Name,
+				fmt.Sprintf("Undefined variable '%s'.", e.Name.Lexeme))
 		}
 
 		return value, nil
@@ -122,12 +143,12 @@ func (i *Interpreter) evaluate(expr ast.Expr) (any, error) {
 	case *ast.Binary:
 		left, err := i.evaluate(e.Left)
 		if err != nil {
-			return nil, fmt.Errorf("invalid left")
+			return nil, err
 		}
 
 		right, err := i.evaluate(e.Right)
 		if err != nil {
-			return nil, fmt.Errorf("invalid right")
+			return nil, err
 		}
 
 		switch e.Operator.Type {
