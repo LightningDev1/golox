@@ -11,13 +11,14 @@ import (
 )
 
 type Interpreter struct {
+	globals     *environment.Environment
 	environment *environment.Environment
 }
 
 func New() *Interpreter {
-	return &Interpreter{
-		environment: environment.New(),
-	}
+	globals := environment.New()
+	globals.Define("clock", &ClockFn{})
+	return &Interpreter{globals: globals, environment: globals}
 }
 
 func (i *Interpreter) Interpret(statements []ast.Stmt) error {
@@ -270,6 +271,36 @@ func (i *Interpreter) evaluate(expr ast.Expr) (any, error) {
 		}
 
 		return i.evaluate(e.Right)
+
+	case *ast.Call:
+		callee, err := i.evaluate(e.Callee)
+		if err != nil {
+			return nil, err
+		}
+
+		var arguments []any
+		for _, arg := range e.Arguments {
+			argValue, err := i.evaluate(arg)
+			if err != nil {
+				return nil, err
+			}
+			arguments = append(arguments, argValue)
+		}
+
+		function, ok := callee.(LoxCallable)
+		if !ok {
+			return nil, NewRuntimeError(e.Paren, "Can only call functions and classes.")
+		}
+
+		if len(arguments) != function.Arity() {
+			return nil, NewRuntimeError(
+				e.Paren,
+				fmt.Sprintf("Expected %d arguments but got %d.",
+					function.Arity(), len(arguments)),
+			)
+		}
+
+		return function.Call(i, arguments)
 	}
 	return nil, nil
 }
