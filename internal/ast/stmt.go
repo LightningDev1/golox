@@ -14,6 +14,11 @@ type PrintStmt struct {
 	Expression Expr
 }
 
+type ReturnStmt struct {
+	Keyword scanner.Token
+	Value   Expr
+}
+
 type VarStmt struct {
 	Name        scanner.Token
 	Initializer Expr
@@ -34,9 +39,17 @@ type WhileStmt struct {
 	Body      Stmt
 }
 
+type FunctionStmt struct {
+	Name   scanner.Token
+	Params []scanner.Token
+	Body   []Stmt
+}
+
 func (*ExpressionStmt) stmtNode() {}
 func (*PrintStmt) stmtNode()      {}
+func (*ReturnStmt) stmtNode()     {}
 func (*VarStmt) stmtNode()        {}
 func (*BlockStmt) stmtNode()      {}
 func (*IfStmt) stmtNode()         {}
 func (*WhileStmt) stmtNode()      {}
+func (*FunctionStmt) stmtNode()   {}

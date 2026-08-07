@@ -88,6 +88,22 @@ func (i *Interpreter) execute(statement ast.Stmt) error {
 				return err
 			}
 		}
+
+	case *ast.FunctionStmt:
+		function := NewLoxFunction(stmt)
+		i.environment.Define(stmt.Name.Lexeme, function)
+
+	case *ast.ReturnStmt:
+		var value any
+		var err error
+		if stmt.Value != nil {
+			value, err = i.evaluate(stmt.Value)
+			if err != nil {
+				return err
+			}
+		}
+
+		return &ReturnError{Value: value}
 	}
 
 	return nil

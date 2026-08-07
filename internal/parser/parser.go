@@ -1,6 +1,8 @@
 package parser
 
 import (
+	"fmt"
+
 	"github.com/LightningDev1/golox/internal/ast"
 	"github.com/LightningDev1/golox/internal/scanner"
 )
@@ -30,7 +32,9 @@ func (p *Parser) Parse() ([]ast.Stmt, error) {
 }
 
 func (p *Parser) declaration() (stmt ast.Stmt, err error) {
-	if p.match(scanner.TOKEN_VAR) {
+	if p.match(scanner.TOKEN_FUN) {
+		stmt, err = p.function("function")
+	} else if p.match(scanner.TOKEN_VAR) {
 		stmt, err = p.varDeclaration()
 	} else {
 		stmt, err = p.statement()
@@ -42,6 +46,59 @@ func (p *Parser) declaration() (stmt ast.Stmt, err error) {
 	}
 
 	return stmt, nil
+}
+
+func (p *Parser) function(kind string) (ast.Stmt, error) {
+	name, err := p.consume(scanner.TOKEN_IDENTIFIER,
+		fmt.Sprintf("Expect %s name.", kind))
+	if err != nil {
+		return nil, err
+	}
+
+	_, err = p.consume(scanner.TOKEN_LEFT_PAREN,
+		fmt.Sprintf("Expect '(' after %s name.", kind))
+	if err != nil {
+		return nil, err
+	}
+
+	var parameters []scanner.Token
+	if !p.check(scanner.TOKEN_RIGHT_PAREN) {
+		for {
+			if len(parameters) >= 255 {
+				return nil, NewParseError(p.peek(),
+					"Can't have more than 255 parameters.")
+			}
+
+			paramName, err := p.consume(scanner.TOKEN_IDENTIFIER, "Expect parameter name.")
+			if err != nil {
+				return nil, err
+			}
+
+			parameters = append(parameters, paramName)
+
+			if !p.match(scanner.TOKEN_COMMA) {
+				break
+			}
+		}
+	}
+
+	_, err = p.consume(scanner.TOKEN_RIGHT_PAREN, "Expect ')' after parameters.")
+	if err != nil {
+		return nil, err
+	}
+
+	_, err = p.consume(scanner.TOKEN_LEFT_BRACE,
+		fmt.Sprintf("Expect '{' before %s body.", kind))
+	if err != nil {
+		return nil, err
+	}
+
+	body, err := p.block()
+	if err != nil {
+		return nil, err
+	}
+
+	return &ast.FunctionStmt{Name: name, Params: parameters, Body: body}, nil
 }
 
 func (p *Parser) varDeclaration() (ast.Stmt, error) {
@@ -75,6 +132,9 @@ func (p *Parser) statement() (ast.Stmt, error) {
 	}
 	if p.match(scanner.TOKEN_PRINT) {
 		return p.printStatement()
+	}
+	if p.match(scanner.TOKEN_RETURN) {
+		return p.returnStatement()
 	}
 	if p.match(scanner.TOKEN_WHILE) {
 		return p.whileStatement()
@@ -210,6 +270,26 @@ func (p *Parser) printStatement() (ast.Stmt, error) {
 	}
 
 	return &ast.PrintStmt{Expression: value}, nil
+}
+
+func (p *Parser) returnStatement() (ast.Stmt, error) {
+	keyword := p.previous()
+
+	var value ast.Expr
+	if !p.check(scanner.TOKEN_SEMICOLON) {
+		var err error
+		value, err = p.expression()
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	_, err := p.consume(scanner.TOKEN_SEMICOLON, "Expect ';' after return value.")
+	if err != nil {
+		return nil, err
+	}
+
+	return &ast.ReturnStmt{Keyword: keyword, Value: value}, nil
 }
 
 func (p *Parser) whileStatement() (ast.Stmt, error) {

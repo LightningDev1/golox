@@ -19,3 +19,11 @@ func (e RuntimeError) Error() string {
 	return fmt.Sprintf("[line %d] Error at %s: %s",
 		e.Token.Line, e.Token.Lexeme, e.Message)
 }
+
+type ReturnError struct {
+	Value any
+}
+
+func (r *ReturnError) Error() string {
+	return "return"
+}
