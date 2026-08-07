@@ -7,6 +7,7 @@ import (
 
 	"github.com/LightningDev1/golox/internal/interpreter"
 	"github.com/LightningDev1/golox/internal/parser"
+	"github.com/LightningDev1/golox/internal/resolver"
 	"github.com/LightningDev1/golox/internal/scanner"
 )
 
@@ -38,6 +39,13 @@ func (r *Runtime) Run(source string) {
 	}
 
 	if r.HadError {
+		return
+	}
+
+	res := resolver.New(r.interpreter)
+	if err = res.Resolve(statements); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		r.HadError = true
 		return
 	}
 

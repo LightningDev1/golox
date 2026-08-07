@@ -13,12 +13,18 @@ import (
 type Interpreter struct {
 	globals     *environment.Environment
 	environment *environment.Environment
+	locals      map[ast.Expr]int
 }
 
 func New() *Interpreter {
 	globals := environment.New()
 	globals.Define("clock", &ClockFn{})
-	return &Interpreter{globals: globals, environment: globals}
+
+	return &Interpreter{
+		globals:     globals,
+		environment: globals,
+		locals:      make(map[ast.Expr]int),
+	}
 }
 
 func (i *Interpreter) Interpret(statements []ast.Stmt) error {
@@ -29,6 +35,10 @@ func (i *Interpreter) Interpret(statements []ast.Stmt) error {
 	}
 
 	return nil
+}
+
+func (i *Interpreter) Resolve(expr ast.Expr, depth int) {
+	i.locals[expr] = depth
 }
 
 func (i *Interpreter) execute(statement ast.Stmt) error {
@@ -164,12 +174,7 @@ func (i *Interpreter) evaluate(expr ast.Expr) (any, error) {
 		}
 
 	case *ast.Variable:
-		value, ok := i.environment.Get(e.Name)
-		if !ok {
-			return nil, NewRuntimeError(e.Name,
-				fmt.Sprintf("Undefined variable '%s'.", e.Name.Lexeme))
-		}
-		return value, nil
+		return i.lookupVariable(e.Name, e)
 
 	case *ast.Assign:
 		value, err := i.evaluate(e.Value)
@@ -177,13 +182,17 @@ func (i *Interpreter) evaluate(expr ast.Expr) (any, error) {
 			return nil, err
 		}
 
-		ok := i.environment.Assign(e.Name, value)
-		if !ok {
-			return nil, NewRuntimeError(e.Name,
-				fmt.Sprintf("Undefined variable '%s'.", e.Name.Lexeme))
+		if distance, ok := i.locals[e]; ok {
+			i.environment.AssignAt(distance, e.Name, value)
+			return value, nil
 		}
 
-		return value, nil
+		if ok := i.globals.Assign(e.Name, value); ok {
+			return value, nil
+		}
+
+		return nil, NewRuntimeError(e.Name,
+			fmt.Sprintf("Undefined variable '%s'.", e.Name.Lexeme))
 
 	case *ast.Binary:
 		left, err := i.evaluate(e.Left)
@@ -319,6 +328,19 @@ func (i *Interpreter) evaluate(expr ast.Expr) (any, error) {
 		return function.Call(i, arguments)
 	}
 	return nil, nil
+}
+
+func (i *Interpreter) lookupVariable(name scanner.Token, expr ast.Expr) (any, error) {
+	if distance, ok := i.locals[expr]; ok {
+		return i.environment.GetAt(distance, name.Lexeme), nil
+	}
+
+	value, ok := i.globals.Get(name)
+	if !ok {
+		return nil, NewRuntimeError(name, fmt.Sprintf("Undefined variable '%s'.", name.Lexeme))
+	}
+
+	return value, nil
 }
 
 func (i *Interpreter) isTruthy(value any) bool {
