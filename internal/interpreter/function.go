@@ -10,10 +10,11 @@ import (
 
 type LoxFunction struct {
 	declaration *ast.FunctionStmt
+	closure     *environment.Environment
 }
 
-func NewLoxFunction(declaration *ast.FunctionStmt) *LoxFunction {
-	return &LoxFunction{declaration: declaration}
+func NewLoxFunction(declaration *ast.FunctionStmt, closure *environment.Environment) *LoxFunction {
+	return &LoxFunction{declaration: declaration, closure: closure}
 }
 
 func (f *LoxFunction) Arity() int {
@@ -21,7 +22,7 @@ func (f *LoxFunction) Arity() int {
 }
 
 func (f *LoxFunction) Call(i *Interpreter, arguments []any) (any, error) {
-	env := environment.NewEnclosing(i.globals)
+	env := environment.NewEnclosing(f.closure)
 	for i, param := range f.declaration.Params {
 		env.Define(param.Lexeme, arguments[i])
 	}

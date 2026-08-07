@@ -90,7 +90,7 @@ func (i *Interpreter) execute(statement ast.Stmt) error {
 		}
 
 	case *ast.FunctionStmt:
-		function := NewLoxFunction(stmt)
+		function := NewLoxFunction(stmt, i.environment)
 		i.environment.Define(stmt.Name.Lexeme, function)
 
 	case *ast.ReturnStmt:
