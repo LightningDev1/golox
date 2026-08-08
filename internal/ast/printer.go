@@ -17,31 +17,31 @@ func (p *Printer) Print(expr Expr) string {
 	}
 
 	switch e := expr.(type) {
-	case *Literal:
+	case *LiteralExpr:
 		if e.Value == nil {
 			return "nil"
 		}
 		return fmt.Sprintf("%v", e.Value)
 
-	case *Unary:
+	case *UnaryExpr:
 		return p.parenthesize(e.Operator.Lexeme, e.Right)
 
-	case *Binary:
+	case *BinaryExpr:
 		return p.parenthesize(e.Operator.Lexeme, e.Left, e.Right)
 
-	case *Grouping:
+	case *GroupingExpr:
 		return p.parenthesize("group", e.Expression)
 
-	case *Variable:
+	case *VariableExpr:
 		return e.Name.Lexeme
 
-	case *Assign:
+	case *AssignExpr:
 		return p.parenthesize("= "+e.Name.Lexeme, e.Value)
 
-	case *Logical:
+	case *LogicalExpr:
 		return p.parenthesize(e.Operator.Lexeme, e.Left, e.Right)
 
-	case *Call:
+	case *CallExpr:
 		args := append([]Expr{e.Callee}, e.Arguments...)
 		return p.parenthesize("call", args...)
 

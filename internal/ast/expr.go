@@ -6,51 +6,69 @@ type Expr interface {
 	exprNode()
 }
 
-type Binary struct {
+type BinaryExpr struct {
 	Left     Expr
 	Operator scanner.Token
 	Right    Expr
 }
 
-type Grouping struct {
+type GroupingExpr struct {
 	Expression Expr
 }
 
-type Literal struct {
+type LiteralExpr struct {
 	Value any
 }
 
-type Unary struct {
+type UnaryExpr struct {
 	Operator scanner.Token
 	Right    Expr
 }
 
-type Variable struct {
+type VariableExpr struct {
 	Name scanner.Token
 }
 
-type Assign struct {
+type AssignExpr struct {
 	Name  scanner.Token
 	Value Expr
 }
 
-type Logical struct {
+type LogicalExpr struct {
 	Left     Expr
 	Operator scanner.Token
 	Right    Expr
 }
 
-type Call struct {
+type CallExpr struct {
 	Callee    Expr
 	Paren     scanner.Token
 	Arguments []Expr
 }
 
-func (*Binary) exprNode()   {}
-func (*Grouping) exprNode() {}
-func (*Literal) exprNode()  {}
-func (*Unary) exprNode()    {}
-func (*Variable) exprNode() {}
-func (*Assign) exprNode()   {}
-func (*Logical) exprNode()  {}
-func (*Call) exprNode()     {}
+type GetExpr struct {
+	Object Expr
+	Name   scanner.Token
+}
+
+type SetExpr struct {
+	Object Expr
+	Name   scanner.Token
+	Value  Expr
+}
+
+type ThisExpr struct {
+	Keyword scanner.Token
+}
+
+func (*BinaryExpr) exprNode()   {}
+func (*GroupingExpr) exprNode() {}
+func (*LiteralExpr) exprNode()  {}
+func (*UnaryExpr) exprNode()    {}
+func (*VariableExpr) exprNode() {}
+func (*AssignExpr) exprNode()   {}
+func (*LogicalExpr) exprNode()  {}
+func (*CallExpr) exprNode()     {}
+func (*GetExpr) exprNode()      {}
+func (*SetExpr) exprNode()      {}
+func (*ThisExpr) exprNode()     {}

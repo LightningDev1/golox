@@ -13,12 +13,22 @@ type FunctionType int
 const (
 	FunctionTypeNone FunctionType = iota
 	FunctionTypeFunction
+	FunctionTypeInitializer
+	FunctionTypeMethod
+)
+
+type ClassType int
+
+const (
+	ClassTypeNone ClassType = iota
+	ClassTypeClass
 )
 
 type Resolver struct {
 	interpreter     *interpreter.Interpreter
 	scopes          []map[string]bool
 	currentFunction FunctionType
+	currentClass    ClassType
 }
 
 func New(interpreter *interpreter.Interpreter) *Resolver {
@@ -26,6 +36,7 @@ func New(interpreter *interpreter.Interpreter) *Resolver {
 		interpreter:     interpreter,
 		scopes:          nil,
 		currentFunction: FunctionTypeNone,
+		currentClass:    ClassTypeNone,
 	}
 }
 
@@ -93,7 +104,37 @@ func (r *Resolver) resolveStmt(statement ast.Stmt) error {
 			return NewResolveError(stmt.Keyword, "Can't return from top-level code.")
 		}
 		if stmt.Value != nil {
+			if r.currentFunction == FunctionTypeInitializer {
+				return NewResolveError(stmt.Keyword, "Can't return a value from an initializer.")
+			}
+			
 			return r.resolveExpr(stmt.Value)
+		}
+
+	case *ast.ClassStmt:
+		enclosingClass := r.currentClass
+		r.currentClass = ClassTypeClass
+		defer func() { r.currentClass = enclosingClass }()
+
+		if err := r.declare(stmt.Name); err != nil {
+			return err
+		}
+		r.define(stmt.Name)
+
+		r.beginScope()
+		defer r.endScope()
+		scope := r.getTopScope()
+		scope["this"] = true
+
+		for _, method := range stmt.Methods {
+			declaration := FunctionTypeMethod
+			if method.Name.Lexeme == "init" {
+				declaration = FunctionTypeInitializer
+			}
+
+			if err := r.resolveFunction(method, declaration); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
@@ -101,7 +142,7 @@ func (r *Resolver) resolveStmt(statement ast.Stmt) error {
 
 func (r *Resolver) resolveExpr(expression ast.Expr) error {
 	switch expr := expression.(type) {
-	case *ast.Variable:
+	case *ast.VariableExpr:
 		if scope := r.getTopScope(); scope != nil {
 			if defined, ok := scope[expr.Name.Lexeme]; ok && !defined {
 				return NewResolveError(expr.Name, "Can't read local variable in its own initializer.")
@@ -109,19 +150,19 @@ func (r *Resolver) resolveExpr(expression ast.Expr) error {
 		}
 		r.resolveLocal(expr, expr.Name)
 
-	case *ast.Assign:
+	case *ast.AssignExpr:
 		if err := r.resolveExpr(expr.Value); err != nil {
 			return err
 		}
 		r.resolveLocal(expr, expr.Name)
 
-	case *ast.Binary:
+	case *ast.BinaryExpr:
 		if err := r.resolveExpr(expr.Left); err != nil {
 			return err
 		}
 		return r.resolveExpr(expr.Right)
 
-	case *ast.Call:
+	case *ast.CallExpr:
 		if err := r.resolveExpr(expr.Callee); err != nil {
 			return err
 		}
@@ -131,20 +172,35 @@ func (r *Resolver) resolveExpr(expression ast.Expr) error {
 			}
 		}
 
-	case *ast.Grouping:
+	case *ast.GroupingExpr:
 		return r.resolveExpr(expr.Expression)
 
-	case *ast.Literal:
+	case *ast.LiteralExpr:
 		return nil
 
-	case *ast.Logical:
+	case *ast.LogicalExpr:
 		if err := r.resolveExpr(expr.Left); err != nil {
 			return err
 		}
 		return r.resolveExpr(expr.Right)
 
-	case *ast.Unary:
+	case *ast.UnaryExpr:
 		return r.resolveExpr(expr.Right)
+
+	case *ast.GetExpr:
+		return r.resolveExpr(expr.Object)
+
+	case *ast.SetExpr:
+		if err := r.resolveExpr(expr.Value); err != nil {
+			return err
+		}
+		return r.resolveExpr(expr.Object)
+
+	case *ast.ThisExpr:
+		if r.currentClass == ClassTypeNone {
+			return NewResolveError(expr.Keyword, "Can't use 'this' outside of a class.")
+		}
+		r.resolveLocal(expr, expr.Keyword)
 	}
 	return nil
 }

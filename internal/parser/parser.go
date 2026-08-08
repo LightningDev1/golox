@@ -32,7 +32,9 @@ func (p *Parser) Parse() ([]ast.Stmt, error) {
 }
 
 func (p *Parser) declaration() (stmt ast.Stmt, err error) {
-	if p.match(scanner.TOKEN_FUN) {
+	if p.match(scanner.TOKEN_CLASS) {
+		stmt, err = p.classDeclaration()
+	} else if p.match(scanner.TOKEN_FUN) {
 		stmt, err = p.function("function")
 	} else if p.match(scanner.TOKEN_VAR) {
 		stmt, err = p.varDeclaration()
@@ -48,7 +50,35 @@ func (p *Parser) declaration() (stmt ast.Stmt, err error) {
 	return stmt, nil
 }
 
-func (p *Parser) function(kind string) (ast.Stmt, error) {
+func (p *Parser) classDeclaration() (ast.Stmt, error) {
+	name, err := p.consume(scanner.TOKEN_IDENTIFIER, "Expect class name.")
+	if err != nil {
+		return nil, err
+	}
+
+	_, err = p.consume(scanner.TOKEN_LEFT_BRACE, "Expect '{' before class body.")
+	if err != nil {
+		return nil, err
+	}
+
+	var methods []*ast.FunctionStmt
+	for !p.check(scanner.TOKEN_RIGHT_BRACE) && !p.isAtEnd() {
+		method, err := p.function("method")
+		if err != nil {
+			return nil, err
+		}
+		methods = append(methods, method)
+	}
+
+	_, err = p.consume(scanner.TOKEN_RIGHT_BRACE, "Expect '}' after class body.")
+	if err != nil {
+		return nil, err
+	}
+
+	return &ast.ClassStmt{Name: name, Methods: methods}, nil
+}
+
+func (p *Parser) function(kind string) (*ast.FunctionStmt, error) {
 	name, err := p.consume(scanner.TOKEN_IDENTIFIER,
 		fmt.Sprintf("Expect %s name.", kind))
 	if err != nil {
@@ -209,7 +239,7 @@ func (p *Parser) forStatement() (ast.Stmt, error) {
 	}
 
 	if condition == nil {
-		condition = &ast.Literal{Value: true}
+		condition = &ast.LiteralExpr{Value: true}
 	}
 	body = &ast.WhileStmt{Condition: condition, Body: body}
 
@@ -365,12 +395,21 @@ func (p *Parser) assignment() (ast.Expr, error) {
 			return nil, err
 		}
 
-		if variable, ok := expr.(*ast.Variable); ok {
-			name := variable.Name
-			return &ast.Assign{Name: name, Value: value}, nil
-		}
+		switch expr := expr.(type) {
+		case *ast.VariableExpr:
+			name := expr.Name
+			return &ast.AssignExpr{Name: name, Value: value}, nil
 
-		return nil, NewParseError(equals, "Invalid assignment target.")
+		case *ast.GetExpr:
+			return &ast.SetExpr{
+				Object: expr.Object,
+				Name:   expr.Name,
+				Value:  value,
+			}, nil
+
+		default:
+			return nil, NewParseError(equals, "Invalid assignment target.")
+		}
 	}
 
 	return expr, nil
@@ -389,7 +428,7 @@ func (p *Parser) or() (ast.Expr, error) {
 			return nil, err
 		}
 
-		expr = &ast.Logical{
+		expr = &ast.LogicalExpr{
 			Left:     expr,
 			Operator: operator,
 			Right:    right,
@@ -412,7 +451,7 @@ func (p *Parser) and() (ast.Expr, error) {
 			return nil, err
 		}
 
-		expr = &ast.Logical{
+		expr = &ast.LogicalExpr{
 			Left:     expr,
 			Operator: operator,
 			Right:    right,
@@ -435,7 +474,7 @@ func (p *Parser) equality() (ast.Expr, error) {
 			return nil, err
 		}
 
-		expr = &ast.Binary{Left: expr, Operator: operator, Right: right}
+		expr = &ast.BinaryExpr{Left: expr, Operator: operator, Right: right}
 	}
 
 	return expr, nil
@@ -455,7 +494,7 @@ func (p *Parser) comparison() (ast.Expr, error) {
 			return nil, err
 		}
 
-		expr = &ast.Binary{Left: expr, Operator: operator, Right: right}
+		expr = &ast.BinaryExpr{Left: expr, Operator: operator, Right: right}
 	}
 
 	return expr, nil
@@ -474,7 +513,7 @@ func (p *Parser) term() (ast.Expr, error) {
 			return nil, err
 		}
 
-		expr = &ast.Binary{Left: expr, Operator: operator, Right: right}
+		expr = &ast.BinaryExpr{Left: expr, Operator: operator, Right: right}
 	}
 
 	return expr, nil
@@ -493,7 +532,7 @@ func (p *Parser) factor() (ast.Expr, error) {
 			return nil, err
 		}
 
-		expr = &ast.Binary{Left: expr, Operator: operator, Right: right}
+		expr = &ast.BinaryExpr{Left: expr, Operator: operator, Right: right}
 	}
 
 	return expr, nil
@@ -508,7 +547,7 @@ func (p *Parser) unary() (ast.Expr, error) {
 			return nil, err
 		}
 
-		return &ast.Unary{Operator: operator, Right: right}, nil
+		return &ast.UnaryExpr{Operator: operator, Right: right}, nil
 	}
 
 	return p.call()
@@ -526,6 +565,13 @@ func (p *Parser) call() (ast.Expr, error) {
 			if err != nil {
 				return nil, err
 			}
+		} else if p.match(scanner.TOKEN_DOT) {
+			name, err := p.consume(scanner.TOKEN_IDENTIFIER, "Expect property name after '.'.")
+			if err != nil {
+				return nil, err
+			}
+
+			expr = &ast.GetExpr{Object: expr, Name: name}
 		} else {
 			break
 		}
@@ -560,26 +606,30 @@ func (p *Parser) finishCall(callee ast.Expr) (ast.Expr, error) {
 		return nil, err
 	}
 
-	return &ast.Call{Callee: callee, Paren: paren, Arguments: arguments}, nil
+	return &ast.CallExpr{Callee: callee, Paren: paren, Arguments: arguments}, nil
 }
 
 func (p *Parser) primary() (ast.Expr, error) {
 	if p.match(scanner.TOKEN_FALSE) {
-		return &ast.Literal{Value: false}, nil
+		return &ast.LiteralExpr{Value: false}, nil
 	}
 	if p.match(scanner.TOKEN_TRUE) {
-		return &ast.Literal{Value: true}, nil
+		return &ast.LiteralExpr{Value: true}, nil
 	}
 	if p.match(scanner.TOKEN_NIL) {
-		return &ast.Literal{Value: nil}, nil
+		return &ast.LiteralExpr{Value: nil}, nil
 	}
 
 	if p.match(scanner.TOKEN_NUMBER, scanner.TOKEN_STRING) {
-		return &ast.Literal{Value: p.previous().Literal}, nil
+		return &ast.LiteralExpr{Value: p.previous().Literal}, nil
+	}
+
+	if p.match(scanner.TOKEN_THIS) {
+		return &ast.ThisExpr{Keyword: p.previous()}, nil
 	}
 
 	if p.match(scanner.TOKEN_IDENTIFIER) {
-		return &ast.Variable{Name: p.previous()}, nil
+		return &ast.VariableExpr{Name: p.previous()}, nil
 	}
 
 	if p.match(scanner.TOKEN_LEFT_PAREN) {
@@ -593,7 +643,7 @@ func (p *Parser) primary() (ast.Expr, error) {
 			return nil, err
 		}
 
-		return &ast.Grouping{Expression: expr}, nil
+		return &ast.GroupingExpr{Expression: expr}, nil
 	}
 
 	return nil, NewParseError(p.peek(), "Expect expression.")

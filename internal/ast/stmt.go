@@ -45,6 +45,11 @@ type FunctionStmt struct {
 	Body   []Stmt
 }
 
+type ClassStmt struct {
+	Name    scanner.Token
+	Methods []*FunctionStmt
+}
+
 func (*ExpressionStmt) stmtNode() {}
 func (*PrintStmt) stmtNode()      {}
 func (*ReturnStmt) stmtNode()     {}
@@ -53,3 +58,4 @@ func (*BlockStmt) stmtNode()      {}
 func (*IfStmt) stmtNode()         {}
 func (*WhileStmt) stmtNode()      {}
 func (*FunctionStmt) stmtNode()   {}
+func (*ClassStmt) stmtNode()      {}

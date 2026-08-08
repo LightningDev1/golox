@@ -9,12 +9,31 @@ import (
 )
 
 type LoxFunction struct {
-	declaration *ast.FunctionStmt
-	closure     *environment.Environment
+	declaration   *ast.FunctionStmt
+	closure       *environment.Environment
+	isInitializer bool
 }
 
-func NewLoxFunction(declaration *ast.FunctionStmt, closure *environment.Environment) *LoxFunction {
-	return &LoxFunction{declaration: declaration, closure: closure}
+func NewLoxFunction(
+	declaration *ast.FunctionStmt,
+	closure *environment.Environment,
+	isInitializer bool,
+) *LoxFunction {
+	return &LoxFunction{
+		declaration:   declaration,
+		closure:       closure,
+		isInitializer: isInitializer,
+	}
+}
+
+func (f *LoxFunction) Bind(instance *LoxInstance) *LoxFunction {
+	env := environment.NewEnclosing(f.closure)
+	env.Define("this", instance)
+	return &LoxFunction{
+		declaration:   f.declaration,
+		closure:       env,
+		isInitializer: f.isInitializer,
+	}
 }
 
 func (f *LoxFunction) Arity() int {
@@ -29,10 +48,20 @@ func (f *LoxFunction) Call(i *Interpreter, arguments []any) (any, error) {
 
 	err := i.executeBlock(f.declaration.Body, env)
 	if ret, ok := errors.AsType[*ReturnError](err); ok {
+		if f.isInitializer {
+			return f.closure.GetAt(0, "this"), err
+		}
+
 		return ret.Value, nil
+	} else if err != nil {
+		return nil, err
 	}
 
-	return nil, err
+	if f.isInitializer {
+		return f.closure.GetAt(0, "this"), err
+	}
+
+	return nil, nil
 }
 
 func (f *LoxFunction) String() string {

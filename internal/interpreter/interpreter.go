@@ -100,7 +100,7 @@ func (i *Interpreter) execute(statement ast.Stmt) error {
 		}
 
 	case *ast.FunctionStmt:
-		function := NewLoxFunction(stmt, i.environment)
+		function := NewLoxFunction(stmt, i.environment, false)
 		i.environment.Define(stmt.Name.Lexeme, function)
 
 	case *ast.ReturnStmt:
@@ -114,6 +114,16 @@ func (i *Interpreter) execute(statement ast.Stmt) error {
 		}
 
 		return &ReturnError{Value: value}
+
+	case *ast.ClassStmt:
+		i.environment.Define(stmt.Name.Lexeme, nil)
+		methods := make(map[string]*LoxFunction)
+		for _, method := range stmt.Methods {
+			name := method.Name.Lexeme
+			methods[name] = NewLoxFunction(method, i.environment, name == "init")
+		}
+		class := NewLoxClass(stmt.Name.Lexeme, methods)
+		_ = i.environment.Assign(stmt.Name, class)
 	}
 
 	return nil
@@ -152,10 +162,10 @@ func (i *Interpreter) evaluate(expr ast.Expr) (any, error) {
 	}
 
 	switch e := expr.(type) {
-	case *ast.Literal:
+	case *ast.LiteralExpr:
 		return e.Value, nil
 
-	case *ast.Unary:
+	case *ast.UnaryExpr:
 		right, err := i.evaluate(e.Right)
 		if err != nil {
 			return nil, err
@@ -173,10 +183,10 @@ func (i *Interpreter) evaluate(expr ast.Expr) (any, error) {
 			return value, nil
 		}
 
-	case *ast.Variable:
+	case *ast.VariableExpr:
 		return i.lookupVariable(e.Name, e)
 
-	case *ast.Assign:
+	case *ast.AssignExpr:
 		value, err := i.evaluate(e.Value)
 		if err != nil {
 			return nil, err
@@ -194,7 +204,7 @@ func (i *Interpreter) evaluate(expr ast.Expr) (any, error) {
 		return nil, NewRuntimeError(e.Name,
 			fmt.Sprintf("Undefined variable '%s'.", e.Name.Lexeme))
 
-	case *ast.Binary:
+	case *ast.BinaryExpr:
 		left, err := i.evaluate(e.Left)
 		if err != nil {
 			return nil, err
@@ -275,10 +285,10 @@ func (i *Interpreter) evaluate(expr ast.Expr) (any, error) {
 			return i.isEqual(left, right), nil
 		}
 
-	case *ast.Grouping:
+	case *ast.GroupingExpr:
 		return i.evaluate(e.Expression)
 
-	case *ast.Logical:
+	case *ast.LogicalExpr:
 		left, err := i.evaluate(e.Left)
 		if err != nil {
 			return nil, err
@@ -297,7 +307,7 @@ func (i *Interpreter) evaluate(expr ast.Expr) (any, error) {
 
 		return i.evaluate(e.Right)
 
-	case *ast.Call:
+	case *ast.CallExpr:
 		callee, err := i.evaluate(e.Callee)
 		if err != nil {
 			return nil, err
@@ -326,6 +336,40 @@ func (i *Interpreter) evaluate(expr ast.Expr) (any, error) {
 		}
 
 		return function.Call(i, arguments)
+
+	case *ast.GetExpr:
+		object, err := i.evaluate(e.Object)
+		if err != nil {
+			return nil, err
+		}
+
+		if instance, ok := object.(*LoxInstance); ok {
+			return instance.Get(e.Name)
+		}
+
+		return nil, NewRuntimeError(e.Name, "Only instances have properties.")
+
+	case *ast.SetExpr:
+		object, err := i.evaluate(e.Object)
+		if err != nil {
+			return nil, err
+		}
+
+		instance, ok := object.(*LoxInstance)
+		if !ok {
+			return nil, NewRuntimeError(e.Name, "Only instances have fields.")
+		}
+
+		value, err := i.evaluate(e.Value)
+		if err != nil {
+			return nil, err
+		}
+
+		instance.Set(e.Name, value)
+		return value, nil
+
+	case *ast.ThisExpr:
+		return i.lookupVariable(e.Keyword, e)
 	}
 	return nil, nil
 }
